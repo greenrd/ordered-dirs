@@ -8,10 +8,9 @@ import Data.List (dropWhileEnd, find, genericLength)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import Data.Machine.Plan (await, yield)
-import Data.Machine.Process ((~>), auto, filtered, Process, ProcessT, supply)
+import Data.Machine.Process ((~>), ProcessT, supply)
 import Data.Machine.Runner (runT)
 import Data.Machine.Source (iterated, Source)
-import Data.Machine.Tee (capL, zipping)
 import Data.Machine.Type (repeatedly)
 import Data.Time.Clock.POSIX (getPOSIXTime, POSIXTime)
 import Foreign.C.Types (CTime(CTime))
@@ -67,7 +66,7 @@ orderedDirOps source =
             let fileSet  = Set.fromList d
                 lineNums :: Source Int
                 lineNums = iterated succ 1
-            lines <- runT (sourceHandle byLine fh ~> removeComments ~> capL lineNums zipping) `finally` hClose fh
+            lines <- preprocess <$> runT (sourceHandle byLine fh) `finally` hClose fh
             let nDigits = length . show $ length lines
             result <- runT . supply lines $ processOrderLine nDigits fileSet
             curTime <- liftIO getPOSIXTime
@@ -88,7 +87,10 @@ orderedDirOps source =
           doReadLink (Right contents) =
             maybe (Left eNOENT) (Right . target) . find (== filename) $ fst <$> contents
       in doReadLink <$> readDirectory dir
-      
+
+preprocess :: [String] -> [(Int, String)]
+preprocess = zip [1..] . (removeComments =<<)
+
 dot :: POSIXTime -> (FilePath, FileStat)
 dot curTime = (".", FileStat { statEntryType  = Directory
                     , statFileMode   = 0o555
@@ -105,9 +107,11 @@ dot curTime = (".", FileStat { statEntryType  = Directory
 
 dotdot = first ('.' :) . dot
 
-removeComments :: Process String String
-removeComments =
-  auto (dropWhileEnd (== ' ') . takeWhile (/= '#')) ~> filtered (not . null)
+removeComments :: String -> [String]
+removeComments = filterNonEmpty . dropWhileEnd (== ' ') . takeWhile (/= '#')
+  where
+    filterNonEmpty [] = []
+    filterNonEmpty x  = [x]
 
 processOrderLine :: Int -> Set FilePath -> ProcessT IO (Int, String) (FilePath, FileStat)
 processOrderLine nDigits fileSet = repeatedly $ do
