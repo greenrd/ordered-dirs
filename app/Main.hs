@@ -19,7 +19,6 @@ import System.Directory (getDirectoryContents)
 import System.Environment (getArgs)
 import System.FilePath ((</>), splitFileName)
 import System.Fuse
-import System.Posix.Types (COff(COff))
 import System.IO (Handle, hClose, IOMode(ReadMode), openFile)
 import System.IO.Error (isDoesNotExistError, isPermissionError)
 import System.IO.Machine (byLine, sourceHandle)
@@ -30,12 +29,18 @@ isOption :: String -> Bool
 isOption ('-':_) = True
 isOption _ = False
 
+extractSource :: [String] -> (Maybe String, [String])
+extractSource args = let (untilNonOption, fromNonOption) = span isOption args
+                     in case fromNonOption of
+                          []    -> (Nothing, args)
+                          (h:t) -> (pure h,  untilNonOption ++ t)
+
 main :: IO ()
 main = do
     args <- getArgs
-    source <-
-        maybe (fail "source not specified") return $ find (not . isOption) args
-    fuseMain (orderedDirOps source) defaultExceptionHandler
+    let (maybeSource, remainder) = extractSource args
+    source <- maybe (fail "source not specified") return maybeSource
+    fuseRun "ordered-dirs" remainder (orderedDirOps source) defaultExceptionHandler
 
 orderedDirOps :: FilePath -> FuseOperations ()
 orderedDirOps source =
@@ -91,17 +96,17 @@ orderedDirOps source =
 
 dot :: POSIXTime -> (FilePath, FileStat)
 dot curTime = (".", FileStat { statEntryType  = Directory
-                    , statFileMode   = 0o555
-                    , statLinkCount  = 2
-                    , statFileOwner  = 0
-                    , statFileGroup  = 0
-                    , statSpecialDeviceID = 0
-                    , statFileSize   = 4096
-                    , statBlocks     = 0
-                    , statAccessTime = CTime $ floor curTime
-                    , statModificationTime = CTime $ floor curTime
-                    , statStatusChangeTime = CTime $ floor curTime
-                    })
+                             , statFileMode   = 0o555
+                             , statLinkCount  = 2
+                             , statFileOwner  = 0
+                             , statFileGroup  = 0
+                             , statSpecialDeviceID = 0
+                             , statFileSize   = 4096
+                             , statBlocks     = 0
+                             , statAccessTime = CTime $ floor curTime
+                             , statModificationTime = CTime $ floor curTime
+                             , statStatusChangeTime = CTime $ floor curTime
+                             })
 
 dotdot = first ('.' :) . dot
 

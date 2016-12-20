@@ -19,7 +19,7 @@ library
   build-depends:       base >= 4.7 && < 5
   default-language:    Haskell2010
 
-executable ordered-dirs-exe
+executable ordered-dirs
   hs-source-dirs:      app
   other-modules:       DirBackingHandles
   main-is:             Main.hs
