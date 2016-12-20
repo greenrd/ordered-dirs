@@ -52,10 +52,10 @@ orderedDirOps source =
     }
   where
     orderFile :: FilePath -> FilePath
-    orderFile fp = source </> fp </> ".order"
+    orderFile fp = source </> tail fp </> ".order"
     openDirectory :: FilePath -> IO (Either Errno DirBackingHandles)
     openDirectory fp = fmap (first toErrNo) . try $ do
-      dl <- getDirectoryContents $ source </> fp
+      dl <- getDirectoryContents $ source </> tail fp
       fh <- openFile (orderFile fp) ReadMode
       return $ DirBackingHandles dl fh
       where
@@ -81,13 +81,14 @@ orderedDirOps source =
     getFileStat fp = impl <$> readDirectory dir
       where
         (dir, filename) = splitFileName fp
+        adjustedFilename = if null filename then "." else filename
         impl (Left l) = Left l
         impl (Right contents) =
-          maybe (Left eNOENT) (Right . snd) $ find ((== filename) . fst) contents
+          maybe (Left eNOENT) (Right . snd) $ find ((== adjustedFilename) . fst) contents
     readSymbolicLink fp =
       let (dir, filename) = splitFileName fp
           target :: FilePath -> FilePath
-          target symLinkName = source </> dir </> tail (dropWhile (/= '-') symLinkName)
+          target symLinkName = source </> tail dir </> tail (dropWhile (/= '-') symLinkName)
           doReadLink :: Either Errno [(FilePath, FileStat)] -> Either Errno FilePath
           doReadLink (Left l) = Left l
           doReadLink (Right contents) =
